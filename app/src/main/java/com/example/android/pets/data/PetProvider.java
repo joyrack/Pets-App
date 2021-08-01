@@ -42,7 +42,7 @@ public class PetProvider extends ContentProvider {
     @Override
     public boolean onCreate() {
         mDbHelper = new PetDbHelper(getContext());
-        return false;
+        return true;
     }
 
     @Nullable
@@ -84,6 +84,9 @@ public class PetProvider extends ContentProvider {
             default:
                 throw new IllegalArgumentException("Cannot query unknown URI " + uri);
         }
+
+        cursor.setNotificationUri(getContext().getContentResolver(), uri);
+
         return cursor;
     }
 
@@ -146,6 +149,9 @@ public class PetProvider extends ContentProvider {
             Log.e(LOG_TAG, "Failed to insert row for " + uri);
             return null;
         }
+
+        getContext().getContentResolver().notifyChange(uri, null);
+
         // Once we know the ID of the new row in the table,
         // return the new URI with the ID appended to the end of it
         return ContentUris.withAppendedId(uri, id);
@@ -171,7 +177,12 @@ public class PetProvider extends ContentProvider {
     private int deletePets(Uri uri, String selection, String[] selectionArgs){
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
-        return database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
+        int rowsDeleted = database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
+
+        if(rowsDeleted != 0){
+            getContext().getContentResolver().notifyChange(uri,null);
+        }
+        return rowsDeleted;
     }
 
     @Override
@@ -226,7 +237,12 @@ public class PetProvider extends ContentProvider {
 
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
-        return database.update(PetEntry.TABLE_NAME, values, selection, selectionArgs);
+        int rowsUpdated = database.update(PetEntry.TABLE_NAME, values, selection, selectionArgs);
 
+        if(rowsUpdated != 0){
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+
+        return rowsUpdated;
     }
 }
