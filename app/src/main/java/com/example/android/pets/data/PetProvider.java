@@ -8,13 +8,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.util.Log;
-import android.view.View;
-import android.widget.ListView;
-import android.widget.Toast;
 
-import com.example.android.pets.CatalogActivity;
-import com.example.android.pets.EditorActivity;
-import com.example.android.pets.R;
 import com.example.android.pets.data.PetContract.PetEntry;
 
 import androidx.annotation.NonNull;
@@ -111,7 +105,7 @@ public class PetProvider extends ContentProvider {
         final int match = sUriMatcher.match(uri);
         switch (match) {
             case PETS:
-                return insertPet(uri, values);
+                return savePet(uri, values);
             default:
                 throw new IllegalArgumentException("Insertion is not supported for " + uri);
         }
@@ -121,14 +115,12 @@ public class PetProvider extends ContentProvider {
      * Insert a pet into the database with the given content values. Return the new content URI
      * for that specific row in the database.
      */
-    private Uri insertPet(Uri uri, ContentValues values) {
+    private Uri savePet(Uri uri, ContentValues values) {
 
         // Check that the name is not null
         String name = values.getAsString(PetEntry.COLUMN_PET_NAME);
         if (name == null || name.equals("")) {
-           // Toast.makeText(getContext(), "Pet requires a name", Toast.LENGTH_SHORT).show();
             throw new IllegalArgumentException("Pet requires a name");
-       //     return null;
         }
 
         Integer gender = values.getAsInteger(PetEntry.COLUMN_PET_GENDER);
@@ -143,7 +135,10 @@ public class PetProvider extends ContentProvider {
 
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
-        long id = database.insert(PetEntry.TABLE_NAME, null, values);
+            long id = database.insert(PetEntry.TABLE_NAME, null, values);
+
+            Log.v(LOG_TAG, "Uri: " + uri);
+
 
         if(id == -1){
             Log.e(LOG_TAG, "Failed to insert row for " + uri);
