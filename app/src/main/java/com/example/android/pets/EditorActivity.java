@@ -18,10 +18,9 @@ package com.example.android.pets;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Intent;
-import android.database.sqlite.SQLiteDatabase;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.text.Editable;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -32,17 +31,20 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NavUtils;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.CursorLoader;
+import androidx.loader.content.Loader;
 
-import com.example.android.pets.data.PetContract;
 import com.example.android.pets.data.PetContract.PetEntry;
-import com.example.android.pets.data.PetDbHelper;
 
 /**
  * Allows user to create a new pet or edit an existing one.
  */
-public class EditorActivity extends AppCompatActivity {
+public class EditorActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
 
     /** EditText field to enter the pet's name */
     private EditText mNameEditText;
@@ -62,11 +64,35 @@ public class EditorActivity extends AppCompatActivity {
      */
     private int mGender = 0;
 
+    /**
+     * The URI that we have attached with the intent.
+     * If there is no URI attached (in the case when we add a new pet), it's value will be null
+     */
+    private Uri currentPetUri;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
 
+        // Examine the intent that was used to launch this activity,
+        // in order to figure out if we're creating a new pet or editing an existing one.
+        Intent intent = getIntent();
+
+        // Getting the data from the intent
+        // The data is the URI we attached to the intent
+        currentPetUri = intent.getData();
+
+        if(currentPetUri == null){
+            // This is a new pet, so change the app bar to say "Add a Pet"
+            setTitle(R.string.editor_activity_title_new_pet);
+        }
+        else{
+            // Otherwise this is an existing pet, so change app bar to say "Edit Pet"
+            setTitle(R.string.editor_activity_title_edit_pet);
+            // Initializing the loader
+            LoaderManager.getInstance(this).initLoader(0, null, this);
+        }
         // Find all relevant views that we will need to read user input from
         mNameEditText = (EditText) findViewById(R.id.edit_pet_name);
         mBreedEditText = (EditText) findViewById(R.id.edit_pet_breed);
@@ -74,6 +100,7 @@ public class EditorActivity extends AppCompatActivity {
         mGenderSpinner = (Spinner) findViewById(R.id.spinner_gender);
 
         setupSpinner();
+
     }
 
     /**
@@ -126,13 +153,11 @@ public class EditorActivity extends AppCompatActivity {
     /**
      * Adds a new pet to the database
      */
-    private long addPet(){
+    private void savePet(){
 
         String name = mNameEditText.getText().toString().trim();
         String breed = mBreedEditText.getText().toString().trim();
         int weight = Integer.parseInt(mWeightEditText.getText().toString().trim());
-
-//        if(name.length() == 0) return -1;
 
         ContentValues values = new ContentValues();
 
@@ -141,23 +166,32 @@ public class EditorActivity extends AppCompatActivity {
         values.put(PetEntry.COLUMN_PET_GENDER, mGender);
         values.put(PetEntry.COLUMN_PET_WEIGHT, weight);
 
-        Uri uri = getContentResolver().insert(PetEntry.CONTENT_URI, values);
+        if(currentPetUri == null) {
+            Uri uri = getContentResolver().insert(PetEntry.CONTENT_URI, values);
 
-        if(uri == null){
-            // If the new content URI is null, then there was an error with insertion.
-            return -1;
+            if (uri == null) {
+                // If the new content URI is null, then there was an error with insertion.
+                Toast.makeText(this, "Error with inserting pet", Toast.LENGTH_SHORT).show();
+            }
+            Toast.makeText(this, "Pet Saved with id: " + ContentUris.parseId(uri), Toast.LENGTH_SHORT).show();
         }
-        return ContentUris.parseId(uri);
+        else{
+            int rowsUpdated = getContentResolver().update(currentPetUri, values, null, null);
+
+            if(rowsUpdated == 0){
+                Toast.makeText(this, "Update Failed", Toast.LENGTH_SHORT).show();
+            }
+            Toast.makeText(this, "Pet Updated Successfully", Toast.LENGTH_SHORT).show();
+        }
     }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // User clicked on a menu option in the app bar overflow menu
         switch (item.getItemId()) {
             // Respond to a click on the "Save" menu option
             case R.id.action_save:
-                long rowId = addPet();
-                if(rowId != -1) Toast.makeText(this, "Pet Saved with ID: " + rowId, Toast.LENGTH_SHORT).show();
-                else Toast.makeText(this, "Error with saving pet", Toast.LENGTH_SHORT).show();
+                savePet();
                 finish();   // exit activity
                 return true;
 
@@ -172,5 +206,53 @@ public class EditorActivity extends AppCompatActivity {
                 return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @NonNull
+    @Override
+    public Loader<Cursor> onCreateLoader(int id, @Nullable Bundle args) {
+        String[] projection = {
+                PetEntry._ID,
+                PetEntry.COLUMN_PET_NAME,
+                PetEntry.COLUMN_PET_BREED,
+                PetEntry.COLUMN_PET_GENDER,
+                PetEntry.COLUMN_PET_WEIGHT
+        };
+        return new CursorLoader(this, currentPetUri, projection, null, null, null);
+    }
+
+    @Override
+    public void onLoadFinished(@NonNull Loader<Cursor> loader, Cursor pet) {
+
+        // Even though the cursor only has a single row, i.e it contains data of a single pet
+        // by default the cursor points to the '-1th' row
+        // So in order to move it to the first row, we have to call the method
+        pet.moveToFirst();
+
+        String petName = pet.getString(pet.getColumnIndex(PetEntry.COLUMN_PET_NAME));
+        String petBreed = pet.getString(pet.getColumnIndex(PetEntry.COLUMN_PET_BREED));
+        int petGender = pet.getInt(pet.getColumnIndex(PetEntry.COLUMN_PET_GENDER));
+        String petWeight = pet.getString(pet.getColumnIndex(PetEntry.COLUMN_PET_WEIGHT));
+
+        mNameEditText.setText(petName);
+        mBreedEditText.setText(petBreed);
+        if(petGender == PetEntry.GENDER_UNKNOWN) {
+            mGenderSpinner.setSelection(PetEntry.GENDER_UNKNOWN);
+        }
+        else if(petGender == PetEntry.GENDER_MALE){
+            mGenderSpinner.setSelection(PetEntry.GENDER_MALE);
+        }
+        else{
+            mGenderSpinner.setSelection(PetEntry.GENDER_FEMALE);
+        }
+        mWeightEditText.setText(petWeight);
+    }
+
+    @Override
+    public void onLoaderReset(@NonNull Loader<Cursor> loader) {
+        mNameEditText.setText("");
+        mBreedEditText.setText("");
+        mGenderSpinner.setSelection(PetEntry.GENDER_UNKNOWN);
+        mWeightEditText.setText("");
     }
 }
