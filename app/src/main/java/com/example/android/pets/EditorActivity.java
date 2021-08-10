@@ -264,6 +264,11 @@ public class EditorActivity extends AppCompatActivity implements LoaderManager.L
             return;
         }
 
+        if(TextUtils.isEmpty(name)){
+            Toast.makeText(this, "Invalid name", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         ContentValues values = new ContentValues();
 
         values.put(PetEntry.COLUMN_PET_NAME, name);
